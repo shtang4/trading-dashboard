@@ -36,7 +36,7 @@
     background: var(--bg);
     color: var(--ink);
   }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 64px; }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 32px 20px 64px; }
   h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; }
   .subtitle { color: var(--ink-secondary); font-size: 14px; margin: 0 0 24px; }
 
@@ -236,6 +236,7 @@
             <th>Leverage</th>
             <th>Entry price</th>
             <th>Stop loss</th>
+            <th>Liq. price</th>
             <th>Shares</th>
             <th>Borrowed</th>
             <th>Current price</th>
@@ -256,6 +257,9 @@
       <code>ROI = (Current Value − Invested Capital) ÷ Invested Capital × 100</code>,
       where invested capital is your own cash (Entry × Shares ÷ Leverage) and current
       value is that capital plus the trade's P/L; shown red with &#9888; below −20%.
+      Liq. price is where your equity hits zero: <code>Entry × (1 − 1/Leverage)</code> for
+      longs, <code>Entry × (1 + 1/Leverage)</code> for shorts — brokers force-close at
+      their maintenance-margin level before this, so treat it as the theoretical wipe-out point.
     </div>
   </div>
 </div>
@@ -346,6 +350,7 @@ async function loadPortfolio() {
       <td>${num.format(t.leverage)}x</td>
       <td>${usd.format(t.entry_price)}</td>
       <td>${usd.format(t.stop_loss)}</td>
+      <td>${t.liq_price == null ? '<span class="muted" title="No borrowed money — an unleveraged long can only hit zero equity at $0">—</span>' : usd.format(t.liq_price)}</td>
       <td>${num.format(t.shares)}</td>
       <td>${usd.format(t.borrowed)}</td>
       <td>${t.current_price == null ? '<span class="muted" title="Price unavailable">—</span>' : usd.format(t.current_price)}${breachWarn}</td>

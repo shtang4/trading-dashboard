@@ -86,18 +86,27 @@ def build_trade_rows(trades):
     ROI = (Current Value - Invested Capital) / Invested Capital * 100
     A trade is flagged stop_breached when the current price is past the
     stop (below it for longs, above it for shorts).
+    Liquidation price is where equity (invested + P/L) reaches zero:
+    Long:  entry * (1 - 1/L)      Short: entry * (1 + 1/L)
+    A real broker force-closes earlier, at its maintenance-margin level,
+    so treat this as the theoretical wipe-out point. An unleveraged long
+    (L = 1) has no liquidation price - equity only hits zero at $0.
     """
     rows = []
     for t in trades:
         position = t["entry_price"] * t["shares"]
         borrowed = position * (1 - 1 / t["leverage"])
         invested = position - borrowed  # your own capital
+        is_long = t["direction"] == "Long"
+        if is_long:
+            liq_price = None if t["leverage"] == 1 else t["entry_price"] * (1 - 1 / t["leverage"])
+        else:
+            liq_price = t["entry_price"] * (1 + 1 / t["leverage"])
         price = get_live_price(t["symbol"])
         risk = None
         roi = None
         stop_breached = False
         if price is not None:
-            is_long = t["direction"] == "Long"
             risk = (price - t["stop_loss"] if is_long else t["stop_loss"] - price) * t["shares"]
             pl = (price - t["entry_price"] if is_long else t["entry_price"] - price) * t["shares"]
             # ROI = (Current Value - Invested Capital) / Invested Capital * 100,
@@ -110,6 +119,7 @@ def build_trade_rows(trades):
                 "position": position,
                 "borrowed": borrowed,
                 "invested": invested,
+                "liq_price": liq_price,
                 "current_price": price,
                 "risk": risk,
                 "roi": roi,

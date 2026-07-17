@@ -21,6 +21,12 @@ when it drops below −20%, and any row whose current price has crossed the
 stop loss (below it for longs, above it for shorts) is highlighted with a
 red warning.
 
+The Liq. price column shows the theoretical liquidation price where your
+equity hits zero: `Entry × (1 − 1/Leverage)` for longs and
+`Entry × (1 + 1/Leverage)` for shorts. Brokers force-close positions at
+their maintenance-margin level before this point. Unleveraged longs (1x)
+show "—" since they can only reach zero equity at $0.
+
 ## Setup
 
 ```bash

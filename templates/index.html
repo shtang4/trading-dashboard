@@ -246,9 +246,10 @@
     </div>
     <div class="empty" id="trades-empty">No leveraged trades yet — add one above.</div>
     <div class="formula-note">
-      Risk at stop: <code>Risk = (Current Price − Stop Loss) × Shares × Leverage</code>
+      Risk at stop: <code>Risk = (Current Price − Stop Loss) × Shares</code>
       (reversed for shorts) — the loss you take if the price hits your stop from here.
-      Borrowed = Entry × Shares × (1 − 1/Leverage).
+      Shares is the total share count of the leveraged position, so leverage is already
+      baked in. Borrowed = Entry × Shares × (1 − 1/Leverage).
     </div>
   </div>
 </div>

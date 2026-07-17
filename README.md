@@ -10,8 +10,9 @@ total portfolio value and total profit/loss.
 A second table tracks leveraged trades: symbol, direction (Long/Short),
 leverage ratio, entry price, stop loss, and shares. For each trade it
 computes the amount borrowed (`Entry × Shares × (1 − 1/Leverage)`) and the
-risk if the stop is hit (`(Current Price − Stop Loss) × Shares × Leverage`,
-reversed for shorts).
+risk if the stop is hit (`(Current Price − Stop Loss) × Shares`, reversed
+for shorts). Shares is the total share count of the leveraged position, so
+leverage is already reflected in the risk number.
 
 ## Setup
 

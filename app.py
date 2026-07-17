@@ -74,11 +74,14 @@ def index():
 def build_trade_rows(trades):
     """Enrich leveraged trades with borrowed amount and stop-loss risk.
 
+    Shares is the TOTAL share count of the leveraged position, so the
+    price move times shares already captures the full loss — no extra
+    leverage multiplier.
     Borrowed: with leverage L you put up 1/L of the position yourself, so
     borrowed = entry_price * shares * (1 - 1/L).
-    Risk (the user's formula, sign-adjusted for shorts):
-    Long:  (Current Price - Stop Loss) * Shares * Leverage
-    Short: (Stop Loss - Current Price) * Shares * Leverage
+    Risk, sign-adjusted for shorts:
+    Long:  (Current Price - Stop Loss) * Shares
+    Short: (Stop Loss - Current Price) * Shares
     """
     rows = []
     for t in trades:
@@ -91,7 +94,7 @@ def build_trade_rows(trades):
                 diff = price - t["stop_loss"]
             else:
                 diff = t["stop_loss"] - price
-            risk = diff * t["shares"] * t["leverage"]
+            risk = diff * t["shares"]
         rows.append(
             {
                 **t,

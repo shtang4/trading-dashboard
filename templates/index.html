@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Portfolio</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --border: #e3e5e8;
+    --ink: #1a1d21;
+    --ink-secondary: #5c6370;
+    --ink-muted: #8b919c;
+    --accent: #3b6ff0;
+    --gain: #1a7f4e;
+    --loss: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --surface: #1e2126;
+      --border: #32363d;
+      --ink: #e8eaed;
+      --ink-secondary: #a6acb8;
+      --ink-muted: #7a8089;
+      --accent: #7397f5;
+      --gain: #4cc38a;
+      --loss: #f07868;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; }
+  .subtitle { color: var(--ink-secondary); font-size: 14px; margin: 0 0 24px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .tile .label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); margin-bottom: 6px; }
+  .tile .value { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile .sub { font-size: 13px; color: var(--ink-secondary); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  form.add-row {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;
+    padding: 16px 18px; border-bottom: 1px solid var(--border);
+  }
+  form.add-row .field { display: flex; flex-direction: column; gap: 4px; }
+  form.add-row label { font-size: 12px; font-weight: 600; color: var(--ink-secondary); }
+  form.add-row input {
+    padding: 8px 10px; font-size: 14px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--bg); color: var(--ink); width: 130px;
+  }
+  form.add-row input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  button.primary {
+    padding: 9px 18px; font-size: 14px; font-weight: 600; border: none;
+    border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button.primary:hover { filter: brightness(1.08); }
+
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 10px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { padding-left: 18px; }
+  th:last-child, td:last-child { padding-right: 12px; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--ink-muted); border-bottom: 1px solid var(--border);
+  }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  td.symbol { font-weight: 650; }
+  .gain { color: var(--gain); }
+  .loss { color: var(--loss); }
+  .muted { color: var(--ink-muted); }
+  td.actions { width: 1%; }
+  button.delete {
+    border: none; background: none; color: var(--ink-muted); cursor: pointer;
+    font-size: 15px; padding: 2px 6px; border-radius: 4px;
+  }
+  button.delete:hover { color: var(--loss); background: color-mix(in srgb, var(--loss) 12%, transparent); }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin: 0 0 10px; }
+  .toolbar .status { font-size: 13px; color: var(--ink-secondary); }
+  button.refresh {
+    padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink);
+  }
+  button.refresh:hover { border-color: var(--accent); color: var(--accent); }
+  .empty { padding: 28px 18px; text-align: center; color: var(--ink-muted); font-size: 14px; }
+  .error-banner {
+    background: color-mix(in srgb, var(--loss) 10%, var(--surface));
+    color: var(--loss); border: 1px solid color-mix(in srgb, var(--loss) 35%, transparent);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; display: none;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>My Portfolio</h1>
+  <p class="subtitle">Live prices from Yahoo Finance &middot; values in USD</p>
+
+  <div class="tiles">
+    <div class="tile">
+      <div class="label">Total value</div>
+      <div class="value" id="tile-value">—</div>
+    </div>
+    <div class="tile">
+      <div class="label">Total cost</div>
+      <div class="value" id="tile-cost">—</div>
+    </div>
+    <div class="tile">
+      <div class="label">Profit / loss</div>
+      <div class="value" id="tile-gain">—</div>
+      <div class="sub" id="tile-gain-pct"></div>
+    </div>
+  </div>
+
+  <div class="error-banner" id="error-banner"></div>
+
+  <div class="toolbar">
+    <span class="status" id="status"></span>
+    <button class="refresh" id="refresh-btn" type="button">Refresh prices</button>
+  </div>
+
+  <div class="card">
+    <form class="add-row" id="add-form">
+      <div class="field">
+        <label for="in-symbol">Stock symbol</label>
+        <input id="in-symbol" placeholder="e.g. AAPL" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="in-date">Date bought</label>
+        <input id="in-date" type="date" required>
+      </div>
+      <div class="field">
+        <label for="in-price">Price paid ($)</label>
+        <input id="in-price" type="number" step="any" min="0.0001" placeholder="150.00" required>
+      </div>
+      <div class="field">
+        <label for="in-shares">Shares</label>
+        <input id="in-shares" type="number" step="any" min="0.0001" placeholder="10" required>
+      </div>
+      <button class="primary" type="submit">Add</button>
+    </form>
+
+    <div class="table-scroll">
+      <table id="holdings-table" style="display:none">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Date bought</th>
+            <th>Price paid</th>
+            <th>Shares</th>
+            <th>Cost</th>
+            <th>Current price</th>
+            <th>Current value</th>
+            <th>Profit / loss</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="holdings-body"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="empty-msg">No holdings yet — add your first stock above.</div>
+  </div>
+</div>
+
+<script>
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const num = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 });
+
+function fmtGain(value, pct) {
+  if (value == null) return { text: "—", cls: "muted" };
+  const sign = value >= 0 ? "+" : "−";
+  const abs = usd.format(Math.abs(value));
+  const pctText = pct == null ? "" : ` (${sign}${Math.abs(pct).toFixed(2)}%)`;
+  return { text: `${sign}${abs}${pctText}`, cls: value >= 0 ? "gain" : "loss" };
+}
+
+async function loadPortfolio() {
+  const status = document.getElementById("status");
+  status.textContent = "Fetching prices…";
+  let data;
+  try {
+    const res = await fetch("/api/portfolio");
+    data = await res.json();
+  } catch (e) {
+    status.textContent = "Could not reach the server.";
+    return;
+  }
+
+  const body = document.getElementById("holdings-body");
+  body.innerHTML = "";
+  const table = document.getElementById("holdings-table");
+  const empty = document.getElementById("empty-msg");
+  const hasRows = data.holdings.length > 0;
+  table.style.display = hasRows ? "" : "none";
+  empty.style.display = hasRows ? "none" : "";
+
+  for (const h of data.holdings) {
+    const tr = document.createElement("tr");
+    const g = fmtGain(h.gain, h.gain_pct);
+    tr.innerHTML = `
+      <td class="symbol">${h.symbol}</td>
+      <td>${h.buy_date}</td>
+      <td>${usd.format(h.buy_price)}</td>
+      <td>${num.format(h.shares)}</td>
+      <td>${usd.format(h.cost)}</td>
+      <td>${h.current_price == null ? '<span class="muted" title="Price unavailable">—</span>' : usd.format(h.current_price)}</td>
+      <td>${h.current_value == null ? '<span class="muted">—</span>' : usd.format(h.current_value)}</td>
+      <td class="${g.cls}">${g.text}</td>
+      <td class="actions"><button class="delete" title="Remove ${h.symbol}" data-id="${h.id}">&#10005;</button></td>`;
+    body.appendChild(tr);
+  }
+
+  document.getElementById("tile-cost").textContent = usd.format(data.totals.cost);
+  document.getElementById("tile-value").textContent =
+    data.totals.value == null ? "—" : usd.format(data.totals.value);
+  const tg = fmtGain(data.totals.gain, null);
+  const tileGain = document.getElementById("tile-gain");
+  tileGain.textContent = tg.text;
+  tileGain.className = "value " + tg.cls;
+  document.getElementById("tile-gain-pct").textContent =
+    data.totals.gain_pct == null ? "" :
+    `${data.totals.gain_pct >= 0 ? "+" : "−"}${Math.abs(data.totals.gain_pct).toFixed(2)}% overall`;
+
+  status.textContent = data.totals.prices_incomplete
+    ? "Some live prices could not be fetched from Yahoo Finance — totals shown as — until they load. Try Refresh."
+    : hasRows ? `Prices updated ${new Date().toLocaleTimeString()}` : "";
+}
+
+function showError(msg) {
+  const banner = document.getElementById("error-banner");
+  banner.textContent = msg;
+  banner.style.display = msg ? "block" : "none";
+}
+
+document.getElementById("add-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showError("");
+  const payload = {
+    symbol: document.getElementById("in-symbol").value,
+    buy_date: document.getElementById("in-date").value,
+    buy_price: document.getElementById("in-price").value,
+    shares: document.getElementById("in-shares").value,
+  };
+  const res = await fetch("/api/holdings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showError(err.error || "Could not add holding.");
+    return;
+  }
+  e.target.reset();
+  document.getElementById("in-symbol").focus();
+  loadPortfolio();
+});
+
+document.getElementById("holdings-body").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button.delete");
+  if (!btn) return;
+  const res = await fetch(`/api/holdings/${btn.dataset.id}`, { method: "DELETE" });
+  if (res.ok) loadPortfolio();
+});
+
+document.getElementById("refresh-btn").addEventListener("click", loadPortfolio);
+loadPortfolio();
+</script>
+</body>
+</html>

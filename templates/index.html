@@ -67,7 +67,11 @@
     padding: 8px 10px; font-size: 14px; border: 1px solid var(--border);
     border-radius: 6px; background: var(--bg); color: var(--ink); width: 130px;
   }
-  form.add-row input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  form.add-row input:focus, form.add-row select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  form.add-row select {
+    padding: 8px 10px; font-size: 14px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--bg); color: var(--ink); width: 100px;
+  }
   button.primary {
     padding: 9px 18px; font-size: 14px; font-weight: 600; border: none;
     border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer;
@@ -105,6 +109,12 @@
   }
   button.refresh:hover { border-color: var(--accent); color: var(--accent); }
   .empty { padding: 28px 18px; text-align: center; color: var(--ink-muted); font-size: 14px; }
+  h2 { font-size: 16px; font-weight: 650; margin: 32px 0 10px; }
+  .formula-note {
+    padding: 10px 18px; border-top: 1px solid var(--border);
+    font-size: 12.5px; color: var(--ink-muted);
+  }
+  .formula-note code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--ink-secondary); }
   .error-banner {
     background: color-mix(in srgb, var(--loss) 10%, var(--surface));
     color: var(--loss); border: 1px solid color-mix(in srgb, var(--loss) 35%, transparent);
@@ -181,6 +191,66 @@
     </div>
     <div class="empty" id="empty-msg">No holdings yet — add your first stock above.</div>
   </div>
+
+  <h2>Leveraged trades</h2>
+  <div class="card">
+    <form class="add-row" id="trade-form">
+      <div class="field">
+        <label for="tr-symbol">Stock symbol</label>
+        <input id="tr-symbol" placeholder="e.g. TSLA" required autocomplete="off" style="width:100px">
+      </div>
+      <div class="field">
+        <label for="tr-direction">Direction</label>
+        <select id="tr-direction" required>
+          <option value="Long">Long</option>
+          <option value="Short">Short</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="tr-leverage">Leverage</label>
+        <input id="tr-leverage" type="number" step="any" min="1" placeholder="2" required style="width:70px">
+      </div>
+      <div class="field">
+        <label for="tr-entry">Entry price ($)</label>
+        <input id="tr-entry" type="number" step="any" min="0.0001" placeholder="250.00" required style="width:105px">
+      </div>
+      <div class="field">
+        <label for="tr-stop">Stop loss ($)</label>
+        <input id="tr-stop" type="number" step="any" min="0.0001" placeholder="230.00" required style="width:105px">
+      </div>
+      <div class="field">
+        <label for="tr-shares">Shares</label>
+        <input id="tr-shares" type="number" step="any" min="0.0001" placeholder="10" required style="width:80px">
+      </div>
+      <button class="primary" type="submit">Add</button>
+    </form>
+
+    <div class="table-scroll">
+      <table id="trades-table" style="display:none">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Direction</th>
+            <th>Leverage</th>
+            <th>Entry price</th>
+            <th>Stop loss</th>
+            <th>Shares</th>
+            <th>Borrowed</th>
+            <th>Current price</th>
+            <th>Risk at stop</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="trades-body"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="trades-empty">No leveraged trades yet — add one above.</div>
+    <div class="formula-note">
+      Risk at stop: <code>Risk = (Current Price − Stop Loss) × Shares × Leverage</code>
+      (reversed for shorts) — the loss you take if the price hits your stop from here.
+      Borrowed = Entry × Shares × (1 − 1/Leverage).
+    </div>
+  </div>
 </div>
 
 <script>
@@ -229,6 +299,38 @@ async function loadPortfolio() {
       <td class="${g.cls}">${g.text}</td>
       <td class="actions"><button class="delete" title="Remove ${h.symbol}" data-id="${h.id}">&#10005;</button></td>`;
     body.appendChild(tr);
+  }
+
+  const tBody = document.getElementById("trades-body");
+  tBody.innerHTML = "";
+  const tTable = document.getElementById("trades-table");
+  const tEmpty = document.getElementById("trades-empty");
+  const hasTrades = (data.trades || []).length > 0;
+  tTable.style.display = hasTrades ? "" : "none";
+  tEmpty.style.display = hasTrades ? "none" : "";
+
+  for (const t of data.trades || []) {
+    const tr = document.createElement("tr");
+    let riskCell;
+    if (t.risk == null) {
+      riskCell = '<span class="muted" title="Needs current price">—</span>';
+    } else if (t.risk >= 0) {
+      riskCell = `<span class="loss">−${usd.format(t.risk)}</span>`;
+    } else {
+      riskCell = `<span class="gain" title="Stop is beyond your current price — it would lock in a gain">+${usd.format(-t.risk)}</span>`;
+    }
+    tr.innerHTML = `
+      <td class="symbol">${t.symbol}</td>
+      <td>${t.direction}</td>
+      <td>${num.format(t.leverage)}x</td>
+      <td>${usd.format(t.entry_price)}</td>
+      <td>${usd.format(t.stop_loss)}</td>
+      <td>${num.format(t.shares)}</td>
+      <td>${usd.format(t.borrowed)}</td>
+      <td>${t.current_price == null ? '<span class="muted" title="Price unavailable">—</span>' : usd.format(t.current_price)}</td>
+      <td>${riskCell}</td>
+      <td class="actions"><button class="delete" title="Remove ${t.symbol} trade" data-id="${t.id}">&#10005;</button></td>`;
+    tBody.appendChild(tr);
   }
 
   document.getElementById("tile-cost").textContent = usd.format(data.totals.cost);
@@ -281,6 +383,39 @@ document.getElementById("holdings-body").addEventListener("click", async (e) => 
   const btn = e.target.closest("button.delete");
   if (!btn) return;
   const res = await fetch(`/api/holdings/${btn.dataset.id}`, { method: "DELETE" });
+  if (res.ok) loadPortfolio();
+});
+
+document.getElementById("trade-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showError("");
+  const payload = {
+    symbol: document.getElementById("tr-symbol").value,
+    direction: document.getElementById("tr-direction").value,
+    leverage: document.getElementById("tr-leverage").value,
+    entry_price: document.getElementById("tr-entry").value,
+    stop_loss: document.getElementById("tr-stop").value,
+    shares: document.getElementById("tr-shares").value,
+  };
+  const res = await fetch("/api/trades", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showError(err.error || "Could not add trade.");
+    return;
+  }
+  e.target.reset();
+  document.getElementById("tr-symbol").focus();
+  loadPortfolio();
+});
+
+document.getElementById("trades-body").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button.delete");
+  if (!btn) return;
+  const res = await fetch(`/api/trades/${btn.dataset.id}`, { method: "DELETE" });
   if (res.ok) loadPortfolio();
 });
 

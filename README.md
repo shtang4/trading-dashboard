@@ -7,6 +7,12 @@ shares — and the dashboard fetches the current live price from Yahoo Finance
 (via the `yfinance` library) to show each position's current value plus your
 total portfolio value and total profit/loss.
 
+A second table tracks leveraged trades: symbol, direction (Long/Short),
+leverage ratio, entry price, stop loss, and shares. For each trade it
+computes the amount borrowed (`Entry × Shares × (1 − 1/Leverage)`) and the
+risk if the stop is hit (`(Current Price − Stop Loss) × Shares × Leverage`,
+reversed for shorts).
+
 ## Setup
 
 ```bash

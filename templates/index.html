@@ -36,7 +36,7 @@
     background: var(--bg);
     color: var(--ink);
   }
-  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 64px; }
   h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; }
   .subtitle { color: var(--ink-secondary); font-size: 14px; margin: 0 0 24px; }
 
@@ -93,6 +93,8 @@
   td.symbol { font-weight: 650; }
   .gain { color: var(--gain); }
   .loss { color: var(--loss); }
+  .warn-text { color: var(--loss); font-size: 11.5px; font-weight: 650; white-space: nowrap; }
+  tr.stop-breached td { background: color-mix(in srgb, var(--loss) 7%, transparent); }
   .muted { color: var(--ink-muted); }
   td.actions { width: 1%; }
   button.delete {
@@ -237,6 +239,7 @@
             <th>Shares</th>
             <th>Borrowed</th>
             <th>Current price</th>
+            <th>ROI</th>
             <th>Risk at stop</th>
             <th></th>
           </tr>
@@ -250,6 +253,9 @@
       (reversed for shorts) — the loss you take if the price hits your stop from here.
       Shares is the total share count of the leveraged position, so leverage is already
       baked in. Borrowed = Entry × Shares × (1 − 1/Leverage).
+      <code>ROI = (Current Value − Invested Capital) ÷ Invested Capital × 100</code>,
+      where invested capital is your own cash (Entry × Shares ÷ Leverage) and current
+      value is that capital plus the trade's P/L; shown red with &#9888; below −20%.
     </div>
   </div>
 </div>
@@ -320,6 +326,20 @@ async function loadPortfolio() {
     } else {
       riskCell = `<span class="gain" title="Stop is beyond your current price — it would lock in a gain">+${usd.format(-t.risk)}</span>`;
     }
+    let roiCell;
+    if (t.roi == null) {
+      roiCell = '<span class="muted" title="Needs current price">—</span>';
+    } else {
+      const roiText = `${t.roi >= 0 ? "+" : "−"}${Math.abs(t.roi).toFixed(2)}%`;
+      const roiCls = t.roi < -20 ? "loss" : t.roi >= 0 ? "gain" : "";
+      roiCell = t.roi < -20
+        ? `<span class="loss" title="ROI below −20%">&#9888; ${roiText}</span>`
+        : `<span class="${roiCls}">${roiText}</span>`;
+    }
+    if (t.stop_breached) tr.className = "stop-breached";
+    const breachWarn = t.stop_breached
+      ? `<div class="warn-text">&#9888; ${t.direction === "Long" ? "Below" : "Above"} stop loss</div>`
+      : "";
     tr.innerHTML = `
       <td class="symbol">${t.symbol}</td>
       <td>${t.direction}</td>
@@ -328,7 +348,8 @@ async function loadPortfolio() {
       <td>${usd.format(t.stop_loss)}</td>
       <td>${num.format(t.shares)}</td>
       <td>${usd.format(t.borrowed)}</td>
-      <td>${t.current_price == null ? '<span class="muted" title="Price unavailable">—</span>' : usd.format(t.current_price)}</td>
+      <td>${t.current_price == null ? '<span class="muted" title="Price unavailable">—</span>' : usd.format(t.current_price)}${breachWarn}</td>
+      <td>${roiCell}</td>
       <td>${riskCell}</td>
       <td class="actions"><button class="delete" title="Remove ${t.symbol} trade" data-id="${t.id}">&#10005;</button></td>`;
     tBody.appendChild(tr);

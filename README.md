@@ -14,6 +14,13 @@ risk if the stop is hit (`(Current Price − Stop Loss) × Shares`, reversed
 for shorts). Shares is the total share count of the leveraged position, so
 leverage is already reflected in the risk number.
 
+Each trade also shows ROI against your own capital:
+`ROI = (Current Value − Invested Capital) ÷ Invested Capital × 100`, where
+invested capital is `Entry × Shares ÷ Leverage`. ROI turns red with a ⚠
+when it drops below −20%, and any row whose current price has crossed the
+stop loss (below it for longs, above it for shorts) is highlighted with a
+red warning.
+
 ## Setup
 
 ```bash

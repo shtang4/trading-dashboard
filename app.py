@@ -82,26 +82,38 @@ def build_trade_rows(trades):
     Risk, sign-adjusted for shorts:
     Long:  (Current Price - Stop Loss) * Shares
     Short: (Stop Loss - Current Price) * Shares
+    ROI is measured against invested capital (position / leverage):
+    ROI = (Current Value - Invested Capital) / Invested Capital * 100
+    A trade is flagged stop_breached when the current price is past the
+    stop (below it for longs, above it for shorts).
     """
     rows = []
     for t in trades:
         position = t["entry_price"] * t["shares"]
         borrowed = position * (1 - 1 / t["leverage"])
+        invested = position - borrowed  # your own capital
         price = get_live_price(t["symbol"])
         risk = None
+        roi = None
+        stop_breached = False
         if price is not None:
-            if t["direction"] == "Long":
-                diff = price - t["stop_loss"]
-            else:
-                diff = t["stop_loss"] - price
-            risk = diff * t["shares"]
+            is_long = t["direction"] == "Long"
+            risk = (price - t["stop_loss"] if is_long else t["stop_loss"] - price) * t["shares"]
+            pl = (price - t["entry_price"] if is_long else t["entry_price"] - price) * t["shares"]
+            # ROI = (Current Value - Invested Capital) / Invested Capital * 100,
+            # where current value is your equity: invested capital plus P/L.
+            roi = pl / invested * 100
+            stop_breached = price < t["stop_loss"] if is_long else price > t["stop_loss"]
         rows.append(
             {
                 **t,
                 "position": position,
                 "borrowed": borrowed,
+                "invested": invested,
                 "current_price": price,
                 "risk": risk,
+                "roi": roi,
+                "stop_breached": stop_breached,
             }
         )
     return rows

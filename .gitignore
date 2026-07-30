@@ -1,2 +1,6 @@
 __pycache__/
 portfolio.json
+portfolio.json.tmp
+.env
+venv/
+.venv/

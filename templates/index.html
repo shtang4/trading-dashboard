@@ -37,8 +37,14 @@
     color: var(--ink);
   }
   .wrap { max-width: 1140px; margin: 0 auto; padding: 32px 20px 64px; }
+  .page-head { display: flex; justify-content: space-between; align-items: flex-start; }
   h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; }
   .subtitle { color: var(--ink-secondary); font-size: 14px; margin: 0 0 24px; }
+  a.logout {
+    font-size: 13px; font-weight: 600; color: var(--ink-secondary); text-decoration: none;
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; white-space: nowrap;
+  }
+  a.logout:hover { border-color: var(--accent); color: var(--accent); }
 
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .tile {
@@ -126,8 +132,13 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>My Portfolio</h1>
-  <p class="subtitle">Live prices from Yahoo Finance &middot; values in USD</p>
+  <div class="page-head">
+    <div>
+      <h1>My Portfolio</h1>
+      <p class="subtitle">Live prices from Yahoo Finance &middot; values in USD</p>
+    </div>
+    {% if auth_enabled %}<a class="logout" href="{{ url_for('logout') }}">Log out</a>{% endif %}
+  </div>
 
   <div class="tiles">
     <div class="tile">

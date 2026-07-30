@@ -27,24 +27,46 @@ equity hits zero: `Entry × (1 − 1/Leverage)` for longs and
 their maintenance-margin level before this point. Unleveraged longs (1x)
 show "—" since they can only reach zero equity at $0.
 
-## Setup
+## Run locally
 
 ```bash
 pip install -r requirements.txt
-```
-
-## Run
-
-```bash
 python app.py
 ```
 
-Then open http://127.0.0.1:5000 in your browser.
+Then open http://127.0.0.1:5000 in your browser. With no password set the
+app runs open, which is fine on your own machine.
+
+## Deploying to a server
+
+See **[DEPLOY.md](DEPLOY.md)** for step-by-step instructions (written for a
+Hostinger VPS, but the Docker / gunicorn+nginx setup applies to any Linux
+server).
+
+In production the app is served by **gunicorn** and protected by a password
+login. Configure it with environment variables (see `.env.example`):
+
+- `DASHBOARD_PASSWORD` — required to view/edit. **If unset, the app runs with
+  no login** and prints a warning; always set it on a public server.
+- `SECRET_KEY` — signs login cookies; set a fixed random value so logins
+  survive restarts.
+- `SESSION_COOKIE_SECURE=1` — enable once served over HTTPS.
+- `DATA_DIR` — where `portfolio.json` is stored.
+
+Run in production with:
+
+```bash
+gunicorn -w 2 -b 127.0.0.1:8000 app:app
+```
 
 ## Notes
 
-- Holdings are saved to `portfolio.json` in the project folder, so your
-  portfolio persists between restarts.
-- Live prices are cached for 60 seconds; click **Refresh prices** to re-fetch.
+- Holdings and trades are saved to `portfolio.json` (in `DATA_DIR`), written
+  atomically so a crash can't corrupt it. Back this file up — it's your whole
+  portfolio.
+- Designed for a single user; the JSON store assumes edits don't truly
+  overlap.
+- Live prices are cached for 60 seconds (`PRICE_CACHE_SECONDS`); click
+  **Refresh prices** to re-fetch.
 - If Yahoo Finance is temporarily unreachable, the affected rows show "—"
   and totals wait until all prices load.

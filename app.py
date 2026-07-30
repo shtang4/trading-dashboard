@@ -1,28 +1,126 @@
 """Simple stock portfolio dashboard.
 
-Holdings are stored in portfolio.json next to this file. Live prices come
-from Yahoo Finance via the yfinance library.
+Holdings and leveraged trades are stored in portfolio.json. Live prices
+come from Yahoo Finance via the yfinance library.
 
-Run with:  python app.py   then open http://127.0.0.1:5000
+Configuration (environment variables):
+  DASHBOARD_PASSWORD  Password required to view/edit. If unset, the app runs
+                      OPEN (no login) and prints a warning — never leave this
+                      unset on a public server.
+  SECRET_KEY          Secret used to sign session cookies. Set a fixed random
+                      value in production so logins survive restarts.
+  DATA_DIR            Directory for portfolio.json (default: this folder).
+  SESSION_COOKIE_SECURE  Set to 1/true when served over HTTPS.
+  PRICE_CACHE_SECONDS    Seconds to cache prices (default 60).
+  PORT / FLASK_DEBUG     Dev server port / debug toggle (dev only).
+
+Local dev:   python app.py
+Production:  gunicorn -w 2 -b 127.0.0.1:8000 app:app
 """
 
+import hmac
 import json
+import os
+import secrets
+import sys
 import time
 import uuid
+from functools import wraps
 from pathlib import Path
 from threading import Lock
 
 import yfinance as yf
-from flask import Flask, jsonify, render_template, request
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 
 app = Flask(__name__)
 
-PORTFOLIO_FILE = Path(__file__).parent / "portfolio.json"
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
+
+app.config.update(
+    SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "").lower()
+    in ("1", "true", "yes"),
+)
+
+if not DASHBOARD_PASSWORD:
+    print(
+        "WARNING: DASHBOARD_PASSWORD is not set — the dashboard is OPEN to "
+        "anyone who can reach it. Set it before exposing this on a public "
+        "server.",
+        file=sys.stderr,
+    )
+elif not os.environ.get("SECRET_KEY"):
+    print(
+        "WARNING: SECRET_KEY is not set — a random one was generated, so "
+        "everyone will be logged out whenever the app restarts. Set a fixed "
+        "SECRET_KEY in production.",
+        file=sys.stderr,
+    )
+
+DATA_DIR = Path(os.environ.get("DATA_DIR") or Path(__file__).parent)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+PORTFOLIO_FILE = DATA_DIR / "portfolio.json"
 _file_lock = Lock()
 
-# Cache prices for a minute so refreshing the page doesn't hammer Yahoo.
-PRICE_CACHE_SECONDS = 60
+# Cache prices so refreshing the page doesn't hammer Yahoo.
+PRICE_CACHE_SECONDS = int(os.environ.get("PRICE_CACHE_SECONDS", "60"))
 _price_cache = {}  # symbol -> (timestamp, price or None)
+
+
+def login_required(view):
+    """Gate a view behind the dashboard password (no-op if none is set)."""
+
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not DASHBOARD_PASSWORD or session.get("authed"):
+            return view(*args, **kwargs)
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Authentication required."}), 401
+        return redirect(url_for("login", next=request.path))
+
+    return wrapped
+
+
+@app.after_request
+def security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    return response
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if not DASHBOARD_PASSWORD:
+        return redirect(url_for("index"))
+    error = None
+    if request.method == "POST":
+        supplied = request.form.get("password", "")
+        if hmac.compare_digest(supplied, DASHBOARD_PASSWORD):
+            session["authed"] = True
+            session.permanent = True
+            nxt = request.args.get("next", "")
+            # Only allow local redirects, never protocol-relative (//host).
+            if not nxt.startswith("/") or nxt.startswith("//"):
+                nxt = url_for("index")
+            return redirect(nxt)
+        error = "Incorrect password."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 def load_data():
@@ -39,8 +137,12 @@ def load_data():
 
 
 def save_data(data):
+    # Write to a temp file and atomically replace, so a crash mid-write
+    # can never leave a truncated portfolio.json behind.
     with _file_lock:
-        PORTFOLIO_FILE.write_text(json.dumps(data, indent=2))
+        tmp = PORTFOLIO_FILE.parent / (PORTFOLIO_FILE.name + ".tmp")
+        tmp.write_text(json.dumps(data, indent=2))
+        os.replace(tmp, PORTFOLIO_FILE)
 
 
 def get_live_price(symbol):
@@ -67,8 +169,9 @@ def get_live_price(symbol):
 
 
 @app.route("/")
+@login_required
 def index():
-    return render_template("index.html")
+    return render_template("index.html", auth_enabled=bool(DASHBOARD_PASSWORD))
 
 
 def build_trade_rows(trades):
@@ -130,6 +233,7 @@ def build_trade_rows(trades):
 
 
 @app.route("/api/portfolio")
+@login_required
 def api_portfolio():
     data = load_data()
     holdings = data["holdings"]
@@ -181,6 +285,7 @@ def api_portfolio():
 
 
 @app.route("/api/holdings", methods=["POST"])
+@login_required
 def add_holding():
     data = request.get_json(silent=True) or {}
     symbol = str(data.get("symbol", "")).strip().upper()
@@ -210,6 +315,7 @@ def add_holding():
 
 
 @app.route("/api/holdings/<holding_id>", methods=["DELETE"])
+@login_required
 def delete_holding(holding_id):
     data = load_data()
     remaining = [h for h in data["holdings"] if h["id"] != holding_id]
@@ -221,6 +327,7 @@ def delete_holding(holding_id):
 
 
 @app.route("/api/trades", methods=["POST"])
+@login_required
 def add_trade():
     payload = request.get_json(silent=True) or {}
     symbol = str(payload.get("symbol", "")).strip().upper()
@@ -258,6 +365,7 @@ def add_trade():
 
 
 @app.route("/api/trades/<trade_id>", methods=["DELETE"])
+@login_required
 def delete_trade(trade_id):
     data = load_data()
     remaining = [t for t in data["trades"] if t["id"] != trade_id]
@@ -269,4 +377,6 @@ def delete_trade(trade_id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="127.0.0.1", port=port, debug=debug)

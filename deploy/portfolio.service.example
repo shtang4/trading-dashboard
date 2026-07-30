@@ -1,0 +1,23 @@
+# systemd unit for running the dashboard with gunicorn (non-Docker path).
+# Save as /etc/systemd/system/portfolio.service, then:
+#   systemctl daemon-reload
+#   systemctl enable --now portfolio
+# Check it with:  systemctl status portfolio   and   journalctl -u portfolio -f
+
+[Unit]
+Description=Stock portfolio dashboard
+After=network.target
+
+[Service]
+Type=simple
+# Adjust User and paths to match your server.
+User=www-data
+WorkingDirectory=/opt/trading-dashboard
+# Loads DASHBOARD_PASSWORD, SECRET_KEY, etc. from the .env file.
+EnvironmentFile=/opt/trading-dashboard/.env
+Environment=DATA_DIR=/opt/trading-dashboard/data
+ExecStart=/opt/trading-dashboard/venv/bin/gunicorn -w 2 -b 127.0.0.1:8000 --timeout 30 app:app
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+services:
+  dashboard:
+    build: .
+    restart: unless-stopped
+    # Bind to localhost only; your nginx/reverse proxy handles the public
+    # side and HTTPS. Change to "8000:8000" only if you intend to expose it
+    # directly (not recommended without TLS in front).
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - portfolio-data:/data
+
+volumes:
+  portfolio-data:

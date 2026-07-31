@@ -9,13 +9,18 @@ Configuration (environment variables):
                       unset on a public server.
   SECRET_KEY          Secret used to sign session cookies. Set a fixed random
                       value in production so logins survive restarts.
-  DATA_DIR            Directory for portfolio.json (default: this folder).
+  DATABASE_URL        Postgres connection string. If set, holdings/trades are
+                      stored in the database (needed on hosts with an
+                      ephemeral filesystem, e.g. Render's free tier). If
+                      unset, data is stored in a local portfolio.json file.
+  DATA_DIR            Directory for portfolio.json when no DATABASE_URL is set
+                      (default: this folder).
   SESSION_COOKIE_SECURE  Set to 1/true when served over HTTPS.
   PRICE_CACHE_SECONDS    Seconds to cache prices (default 60).
   PORT / FLASK_DEBUG     Dev server port / debug toggle (dev only).
 
-Local dev:   python app.py
-Production:  gunicorn -w 2 -b 127.0.0.1:8000 app:app
+Local dev:   python app.py                       (uses portfolio.json)
+Production:  gunicorn -w 2 -b 0.0.0.0:$PORT app:app   (set DATABASE_URL)
 """
 
 import hmac
@@ -123,26 +128,65 @@ def logout():
     return redirect(url_for("login"))
 
 
-def load_data():
-    with _file_lock:
-        if PORTFOLIO_FILE.exists():
-            data = json.loads(PORTFOLIO_FILE.read_text())
-            # Older versions stored a bare list of holdings.
-            if isinstance(data, list):
-                data = {"holdings": data, "trades": []}
-            data.setdefault("holdings", [])
-            data.setdefault("trades", [])
-            return data
-        return {"holdings": [], "trades": []}
+def _normalize(data):
+    """Coerce loaded data into {"holdings": [...], "trades": [...]}."""
+    # Older versions stored a bare list of holdings.
+    if isinstance(data, list):
+        data = {"holdings": data, "trades": []}
+    data.setdefault("holdings", [])
+    data.setdefault("trades", [])
+    return data
 
 
-def save_data(data):
-    # Write to a temp file and atomically replace, so a crash mid-write
-    # can never leave a truncated portfolio.json behind.
-    with _file_lock:
-        tmp = PORTFOLIO_FILE.parent / (PORTFOLIO_FILE.name + ".tmp")
-        tmp.write_text(json.dumps(data, indent=2))
-        os.replace(tmp, PORTFOLIO_FILE)
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+
+if DATABASE_URL:
+    # Persistent storage for hosts with an ephemeral filesystem (e.g. Render
+    # free tier). The whole portfolio is kept as one JSON document in a
+    # single-row table — simple and a good fit for a single-user dashboard.
+    import psycopg
+    from psycopg.types.json import Json
+
+    # Some providers hand out the legacy "postgres://" scheme.
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://") :]
+
+    with psycopg.connect(DATABASE_URL, autocommit=True) as _conn:
+        _conn.execute(
+            "CREATE TABLE IF NOT EXISTS portfolio_kv "
+            "(k TEXT PRIMARY KEY, v JSONB NOT NULL)"
+        )
+
+    def load_data():
+        with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
+            row = conn.execute(
+                "SELECT v FROM portfolio_kv WHERE k = 'portfolio'"
+            ).fetchone()
+        return _normalize(row[0]) if row else {"holdings": [], "trades": []}
+
+    def save_data(data):
+        with psycopg.connect(DATABASE_URL, autocommit=True) as conn:
+            conn.execute(
+                "INSERT INTO portfolio_kv (k, v) VALUES ('portfolio', %s) "
+                "ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v",
+                (Json(data),),
+            )
+
+else:
+    # Local / single-server storage: a plain JSON file.
+    def load_data():
+        with _file_lock:
+            if PORTFOLIO_FILE.exists():
+                return _normalize(json.loads(PORTFOLIO_FILE.read_text()))
+            return {"holdings": [], "trades": []}
+
+    def save_data(data):
+        # Write to a temp file and atomically replace, so a crash mid-write
+        # can never leave a truncated portfolio.json behind.
+        with _file_lock:
+            tmp = PORTFOLIO_FILE.parent / (PORTFOLIO_FILE.name + ".tmp")
+            tmp.write_text(json.dumps(data, indent=2))
+            os.replace(tmp, PORTFOLIO_FILE)
 
 
 def get_live_price(symbol):

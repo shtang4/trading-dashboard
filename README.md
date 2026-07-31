@@ -51,7 +51,11 @@ login. Configure it with environment variables (see `.env.example`):
 - `SECRET_KEY` — signs login cookies; set a fixed random value so logins
   survive restarts.
 - `SESSION_COOKIE_SECURE=1` — enable once served over HTTPS.
-- `DATA_DIR` — where `portfolio.json` is stored.
+- `DATABASE_URL` — optional Postgres connection string. **Set it on hosts
+  with an ephemeral filesystem (e.g. Render's free tier)** so your data
+  persists across restarts. When unset, data is kept in a local
+  `portfolio.json` file — which is all you need locally or on a VPS.
+- `DATA_DIR` — where `portfolio.json` is stored (when no `DATABASE_URL`).
 
 Run in production with:
 

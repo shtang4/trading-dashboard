@@ -1,0 +1,28 @@
+# Render Blueprint — deploys the dashboard on Render's free tier.
+# In Render: New + → Blueprint → connect this repo. Render reads this file.
+# You'll be prompted to fill in the values marked "sync: false" below.
+services:
+  - type: web
+    name: trading-dashboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT --timeout 30 app:app
+    envVars:
+      # The password you'll type to open the dashboard. Set it in the
+      # Render dashboard (kept out of git).
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      # Postgres connection string from your free database (e.g. Neon).
+      # Paste it in the Render dashboard.
+      - key: DATABASE_URL
+        sync: false
+      # Render generates a strong random value once and reuses it, so logins
+      # survive restarts.
+      - key: SECRET_KEY
+        generateValue: true
+      # Render serves over HTTPS, so mark cookies secure.
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
+      - key: PYTHON_VERSION
+        value: "3.12.6"

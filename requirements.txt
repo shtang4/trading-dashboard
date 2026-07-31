@@ -1,3 +1,4 @@
 flask>=3.0
 yfinance>=0.2.50
 gunicorn>=21.0
+psycopg[binary]>=3.1
